@@ -1,1 +1,2 @@
-# dataMiningDataviz
+# Data Minning DataViz Project
+
