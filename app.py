@@ -9,22 +9,51 @@ import dash_table
 from dash.dependencies import Input, Output, State
 import plotly.express as px
 
-import pandas as pd
-df = pd.read_csv('https://raw.githubusercontent.com/plotly/datasets/master/solar.csv')
+from apyori import apriori
+from math import sqrt
+from scipy.spatial import distance
 
-df = pd.DataFrame({
-    "x": [1,2,1,2],
-    "y": [1,2,3,4],
-    "customdata": [1,2,3,4],
-    "fruit": ["apple", "apple", "orange", "orange"]
-})
-fig = px.scatter(df, x="x", y="y", color="fruit", custom_data=["customdata"])
+import pandas as pd
+df = pd.read_csv('./1Cancer.csv')
+
+
+Matriz = df.corr(method='pearson')
+fig = px.scatter(df)
 fig.update_layout(clickmode='event+select')
 fig.update_traces(marker_size=20)
+fig2 = px.imshow(Matriz)
 
-fig2 = px.imshow([[1, 20, 30],
-                 [20, 1, 60],
-                 [30, 60, 1]])
+
+
+
+l= []
+for i in df.iloc:
+    ll=[]
+    for j in df.iloc:
+        ll.append(distance.euclidean(i, j))
+    l.append(ll)
+
+regla = []
+soporte = []
+confianza = []
+Reglas = apriori(df, min_support=0.0045, min_confidence=0.2, min_lift=3, min_length=2) 
+for item in Reglas:
+    pair = item[0]
+    items = [x for x in pair]
+    soporte.append(item[1])
+    confianza.append(item[2][0][2])
+    regla.append(items[0] + " -> " + items[1])
+df2 = pd.DataFrame({
+    "support": soporte,
+    "confidence": confianza,
+    "customdata": regla,
+})
+
+
+fig3 = px.scatter(df2, x="support", y="confidence", custom_data=["customdata"])
+fig3.update_layout(clickmode='event+select')
+fig3.update_traces(marker_size=20)
+
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
@@ -66,16 +95,48 @@ app.layout = html.Div([
 
     dcc.Tabs(id='tabsControlInput', value='tab-1', 
         children=[
-            dcc.Tab(label='Set de datos', value='tab-1'),
+            dcc.Tab(label='Set de datos', value='tab-1',children=[
+                            dash_table.DataTable(
+                                id='table',
+                                columns=[{"name": i, "id": i} for i in df.columns],
+                                data=df.to_dict('records'),    
+                                fixed_rows={'headers': True},
+                                style_cell={'minWidth': '100px', 'width': '100px', 'maxWidth': '100px'},)
+            ]),
             dcc.Tab(label='Correlación', value='tab-2',
                 children = [
                     dcc.Tabs(id="subtabs",value="subtab-1",
                         children = [
-                            dcc.Tab(label='Analisis gráfico', value='subtab-1'),
-                            dcc.Tab(label='Grafica', value='subtab-2'),
-                        ])]),
-            dcc.Tab(label='Apryori', value='tab-3'),
-            dcc.Tab(label='Distancias', value='tab-4'),
+                            dcc.Tab(label='Matriz de correlación',
+                                value='subtab-5',children=[
+                                dash_table.DataTable(
+                                    id='table2',
+                                    columns=[{"name": i, "id": i} for i in Matriz.columns],
+                                    data=Matriz.to_dict('records'),
+                                    fixed_rows={'headers': True},
+                                    style_cell={'minWidth': '100px', 'width': '100px', 'maxWidth': '100px'},)
+                                ]),                            
+                            dcc.Tab(label='Grafica', value='subtab-2',
+                                children=[dcc.Graph(id='basic-interactions2',
+                                figure=fig2),]),])]),
+            
+            dcc.Tab(label='Apryori', value='tab-3',
+                children = [
+                    dcc.Tabs(id="subtabs2",value="subtab-3",
+                        children = [
+                            dcc.Tab(label='Grafica cuadrangular',
+                                value='subtab-3',children=[dcc.Graph(
+                                id='basic-interactions3',figure=fig3)]),
+                            dcc.Tab(label='Grafica cuadrangular',
+                                    value='subtab-4',children=[dcc.Graph(
+                                    id='basic-interactions4',figure=fig)]),
+                            ]),]),
+            dcc.Tab(label='Distancias', value='tab-4',children=[
+                            dash_table.DataTable(
+                id='table3',
+                columns=[{"name": i, "id": i} for i in df.columns],
+                data=df.to_dict('records'))
+            ]),
         ]
     ),
     
@@ -85,53 +146,26 @@ app.layout = html.Div([
 ])
 
 
-@app.callback(Output('tabsControl', 'children'),
-              Input('tabsControlInput', 'value'),
-              )
-def render_content(tab):
-    if tab == 'tab-1':
-        return html.Div([
-            dash_table.DataTable(
-                id='table',
-                columns=[{"name": i, "id": i} for i in df.columns],
-                data=df.to_dict('records'),
-            )
-        ])
-    elif tab == 'tab-2':
-        pass
-
-    elif tab == 'tab-3':
-        return html.Div([
-            html.H3('Apriory')
-        ])
-    elif tab == 'tab-4':
-        return html.Div([
-            dash_table.DataTable(
-                id='table',
-                columns=[{"name": i, "id": i} for i in df.columns],
-                data=df.to_dict('records'),
-            )
-        ])
 
 
-@app.callback(Output('subtabsControl', 'children'),
-              Input('subtabs', 'value'),
-              )
-def render_content2(tab):
-    if tab == 'subtab-1':
-        return html.Div([
-            dcc.Graph(
-        id='basic-interactions',
-        figure=fig
-    ),
-    ])
-    elif tab == 'subtab-2':
-        return html.Div([
-            dcc.Graph(
-        id='basic-interactions',
-        figure=fig2
-    ),
-    ])
+#@app.callback(Output('subtabsControl', 'children'),
+#              Input('subtabs', 'value'),
+#              )
+#def render_content2(tab):
+#    if tab == 'subtab-1':
+#        return html.Div([
+#            dcc.Graph(
+#        id='basic-interactions',
+#        figure=fig
+#    ),
+#    ])
+#    elif tab == 'subtab-2':
+#        return html.Div([
+#            dcc.Graph(
+#        id='basic-interactions2',
+#        figure=fig2
+#    ),
+#    ])
 
 
 def parse_contents(contents, filename, date):
