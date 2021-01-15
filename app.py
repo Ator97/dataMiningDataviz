@@ -16,21 +16,23 @@ from apyori import apriori
 from scipy.spatial import distance
 import plotly.graph_objects as go
 import numpy as np
-
+from sklearn import linear_model
+from sklearn import model_selection
+from sklearn.metrics import classification_report
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score
 from mpl_toolkits.mplot3d import Axes3D
-
-
 from sklearn.cluster import KMeans
 from sklearn.metrics import pairwise_distances_argmin_min
 from kneed import KneeLocator       #https://github.com/arvkevi/kneed/blob/master/kneed/   Utiliza una interpolación
-
-
 
 nut  = 1
 ncd  = 1
 ndm  = 1
 nam  = 1
 nc   = 1
+ns   = 1
+mensaje = ""
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
@@ -38,6 +40,8 @@ app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
 app.layout = html.Div([
     html.H6("Data Minning Crawler"),
+
+  
 
     dcc.Upload( 
         id='upload-data',
@@ -115,7 +119,7 @@ app.layout = html.Div([
                 html.Button('Ejecutar', id='executeDis', n_clicks=0,style={'width': '25%','margin': '3%'}),
                 html.Div(id="distanceMatrix"),                          
             ]),
-            dcc.Tab(label='Clustering Jerarquico', value='tab-5',children=[
+            dcc.Tab(label='Clustering Particional', value='tab-5',children=[
 
                 html.Button('Ejecutar', id='executeCluster', n_clicks=0,style={'width': '25%','margin': '3%'}),
                     dcc.Tabs(id="subtabs-2",value="subtab-2",children = [
@@ -127,12 +131,62 @@ app.layout = html.Div([
                         ]),
                 ])
             ]),
-        ]
-    ),
+            dcc.Tab(label='Clasificación Sigmoide', value='tab-6',children = [
+                html.Button('     Ejecutar', id='executeSigmoide', n_clicks=0,
+                    style={'margin': '2%','textAlign': 'center'}),
+
+                html.Div([
+                    html.Div([
+                        "Compactividad",
+                        dcc.Input(
+                            id="compactividad",  type="number", value= 0.04362,
+                            placeholder="Compactividad",style={'margin': '5%','textAlign': 'center'}),
+                    ],className="six columns"),
+                    html.Div([
+                        "Textura",    
+                        dcc.Input(
+                            id="textura",     type="number", value=24.54,
+                            placeholder="Textura",style={'margin': '5%','textAlign': 'center'}),
+                    ],className="six columns"),
+                ],className="row"),
+                html.Div([
+                    html.Div([
+                        "Area",       
+                        dcc.Input(
+                            id="area",        type="number", value=181.0,
+                            placeholder="Area",style={'margin': '5%','textAlign': 'center'}),
+                    ],className="six columns"),
+                    html.Div([
+                        "Concavidad", 
+                        dcc.Input(
+                            id="concavidad",  type="number",value = 0, 
+                            placeholder="Concavidad",style={'margin': '5%','textAlign': 'center'}),
+                    ],className="six columns"),
+                ],className="row"),
+
+                html.Div([
+                    html.Div([
+                        "Simetria",   
+                        dcc.Input(
+                            id="simetria",  type="number", value=0.1587,
+                            placeholder="Simetria",style={'margin': '5%','textAlign': 'center'}),
+                    ],className="six columns"),
+                    html.Div([
+                        "Dimensión fractal", 
+                        dcc.Input(
+                            id="dimensionFractal",type="number", value=1.0,
+                            placeholder="Dimensión Fractal",style={'margin': '5%','textAlign': 'center'}),
+                    ],className="six columns"),
+                ],className="row"),
+
+                    html.Div(id='sigmoide',style={'textAlign': 'center'}),
+
+            ]),
+        ]),
+
     html.Div(id='tabsControl'),
     html.Div(id='subtabsControl')
 ])
-
 
 def parse_data(contents, filename,separador,decimal):
     content_type, content_string = contents.split(separador)
@@ -153,7 +207,6 @@ def parse_data(contents, filename,separador,decimal):
         return html.Div(["There was an error processing this file."])
 
     return df
-
 
 @app.callback(
     Output("output-data-upload", "children"),
@@ -185,13 +238,10 @@ def update_table(contents, filename,separador,decimal,n_clicks):
                         fixed_rows={'headers': True},
 
                     ),
-
-
                 ]
             )
 
     return table
-
 
 @app.callback(
     [
@@ -238,7 +288,6 @@ def crossData(decimal,separador,contents, filename,correlationMethod,n_clicks):
 
     return figure,table
  
-
 @app.callback(
     Output('distanceMatrix', 'children'),
     [
@@ -293,7 +342,6 @@ def distanceMatrix(decimal,separador,contents, filename,correlationMethod,n_clic
             )
 
     return table
-
 
 def inspect(results):
     rh          = [tuple(result[2][0][0]) for result in results]
@@ -357,7 +405,6 @@ def aprioriMatrix(decimal,separador,contents, filename,soporteMinimo,confidencia
             ])
 
     return table
-
 
 @app.callback(
     [
@@ -426,7 +473,66 @@ def clustering(decimal,separador,contents, filename,n_clicks):
 
     return figure1,figure2
 
+@app.callback(
+    Output('sigmoide', 'children'),
+    [
+        Input('compactividad','value'),
+        Input('textura','value'),
+        Input('area','value'),
+        Input('concavidad','value'),
+        Input('simetria','value'),
+        Input('dimensionFractal','value'),
+        Input('decimal','value'),
+        Input('separador','value'),
+        Input('upload-data', 'contents'),
+        Input('upload-data', 'filename'),
+        Input('executeSigmoide', 'n_clicks')
+    ]
+)
+def sigmoide(compactividad,textura,area,concavidad,simetria,dimensionFractal,decimal,separador,contents, filename,n_clicks):
 
+    global ns
+    mensaje = html.Div()
+    if ns == n_clicks:
+        if contents :
+            ns = nc+1
+            contents = contents[0]
+            filename = filename[0]
+            df = parse_data(contents, filename,separador,decimal)
+            df = df.set_index(df.columns[0])
+            X = np.array(df[['Texture', 'Area', 'Compactness','Concavity', 'Symmetry', 'FractalDimension']])
+            Y = np.array(df[['Diagnosis']])
+
+            Clasificacion = linear_model.LogisticRegression()
+            validation_size = 0.2
+            seed = 1234
+            X_train, X_validation, Y_train, Y_validation = model_selection.train_test_split(
+                                X, Y, test_size=validation_size, random_state=seed, shuffle = True)
+            Clasificacion.fit(X_train, Y_train)
+            Probabilidad = Clasificacion.predict_proba(X_train)
+            Predicciones = Clasificacion.predict(X_train)
+
+            Clasificacion.score(X_train, Y_train)
+            PrediccionesNuevas = Clasificacion.predict(X_validation)
+            confusion_matrix = pd.crosstab(Y_validation.ravel(), PrediccionesNuevas, 
+                                rownames=['Real'], colnames=           ['Predicción'])
+
+            v = Clasificacion.score(X_validation, Y_validation)
+
+            NuevoPaciente = pd.DataFrame({  'Texture': [textura],           'Area': [area], 
+                                            'Compactness': [compactividad], 'Concavity': [concavidad], 
+                                            'Symmetry': [simetria],         'FractalDimension': [dimensionFractal]})
+
+            print(Clasificacion.predict(NuevoPaciente))
+            if  Clasificacion.predict(NuevoPaciente) == "B":
+                mensaje = html.Div(
+                        html.H5("Con una  certeza del " + str(format(v*100, '.2f') ) +"% se pronostica POSITIVO a Cancer ")
+                )
+            else:
+                mensaje = html.Div(
+                        html.H5("Con una  certeza del " + str(format(v*100, '.2f'))  +"% se pronostica NEGATIVO a Cancer "))
+
+    return mensaje
 
 if __name__ == '__main__':
     app.run_server(debug=True)
